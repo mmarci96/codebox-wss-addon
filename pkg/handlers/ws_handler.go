@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -41,7 +42,11 @@ func (cm *ClientManager) Broadcast(message string) {
 	for conn := range cm.clients {
 		if err := conn.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
 			log.Println("Write error:", err)
-			conn.Close()
+			e := conn.Close()
+			if e != nil {
+				log.Fatal("Error closing connection. Is this even possible?")
+				return
+			}
 			delete(cm.clients, conn)
 		}
 	}
@@ -53,7 +58,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func WsHandler(cm *ClientManager) gin.HandlerFunc {
+func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -70,6 +75,20 @@ func WsHandler(cm *ClientManager) gin.HandlerFunc {
 				break
 			}
 			log.Printf("Received: %s", msg)
+
+			var parsed map[string]any
+			if err := json.Unmarshal(msg, &parsed); err == nil {
+				if parsed["type"] == "login" {
+					username := parsed["username"].(string)
+					isRoot := username == hostUser
+					response := fmt.Sprintf("Login received. User: %s, Root: %v", username, isRoot)
+					e := conn.WriteMessage(websocket.TextMessage, []byte(response))
+					if e != nil {
+						return
+					}
+					continue
+				}
+			}
 			cm.Broadcast(fmt.Sprintf("Echo: %s", msg))
 		}
 	}

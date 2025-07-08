@@ -24,6 +24,9 @@
 <body>
 
     <h1>WebSocket Client</h1>
+
+    <input id="usernameInput" type="text" placeholder="Enter username" />
+    <button onclick="sendLogin()">Send</button>
     <input id="messageInput" type="text" placeholder="Enter message" />
     <button onclick="sendMessage()">Send</button>
     <button onclick="connect()">Reconnect</button>
@@ -42,7 +45,7 @@
             ws = new WebSocket("ws://localhost:9000/ws");
 
             ws.onopen = () => {
-                logMessage("✅ Connected");
+                logMessage("✅ Connected. Now click Login to authenticate.");
             };
 
             ws.onmessage = (event) => {
@@ -56,6 +59,25 @@
             ws.onerror = (err) => {
                 logMessage("⚠️ Error: " + err.message);
             };
+        }
+
+        function sendLogin() {
+            const username = document.getElementById("usernameInput").value;
+            if (!username) {
+                logMessage("❗ Please enter a username first.");
+                return;
+            }
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const loginMsg = {
+                    type: "login",
+                    username: username
+                };
+                ws.send(JSON.stringify(loginMsg));
+                logMessage("➡️ Sent login as: " + username);
+            } else {
+                logMessage("❗ WebSocket is not connected.");
+            }
         }
 
         function sendMessage() {
@@ -73,9 +95,6 @@
             log.textContent += msg + "\n";
             log.scrollTop = log.scrollHeight;
         }
-
-        // auto connect on load
-        window.onload = connect;
     </script>
 
 </body>
