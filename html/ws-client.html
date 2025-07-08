@@ -18,6 +18,11 @@
             margin-top: 10px;
             white-space: pre-wrap;
         }
+
+        #approvalSection {
+            margin-top: 20px;
+            display: none;
+        }
     </style>
 </head>
 
@@ -25,20 +30,25 @@
 
     <h1>WebSocket Client</h1>
 
-    <input id="usernameInput" type="text" placeholder="Enter username" autofocus />
-    <button id="loginBtn" onclick="sendLogin()" disabled>Login</button>
+    <input id="usernameInput" type="text" placeholder="Enter username" />
+    <button onclick="sendLogin()">Login</button>
     <br><br>
-    <input id="messageInput" type="text" placeholder="Enter message" />
-    <button id="sendBtn" onclick="sendMessage()" disabled>Send Message</button>
-    <button onclick="connect()">Connect</button>
+    <button onclick="getSecret()">Get Secret</button>
+    <button onclick="connect()">Reconnect</button>
+
+    <div id="approvalSection">
+        <p id="approvalPrompt"></p>
+        <button onclick="approveSecret()">Approve</button>
+        <button onclick="denySecret()">Deny</button>
+    </div>
 
     <div id="log"></div>
 
     <script>
         let ws;
+        let isRoot = false;
+        let pendingRequestUser = null;
         const log = document.getElementById("log");
-        const loginBtn = document.getElementById("loginBtn");
-        const sendBtn = document.getElementById("sendBtn");
 
         function connect() {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -48,65 +58,78 @@
             ws = new WebSocket("ws://localhost:9000/ws");
 
             ws.onopen = () => {
-                logMessage("✅ Connected. Now click Login to authenticate.");
-                loginBtn.disabled = false;
-                sendBtn.disabled = false;
+                logMessage("✅ Connected");
             };
 
             ws.onmessage = (event) => {
-                logMessage("📨 " + event.data);
+                console.log("Event data:", event.data)
+                const data = JSON.parse(event.data);
+                console.log("Parsed", data)
+                if (data.type === "login_ack") {
+                    isRoot = data.root;
+                    logMessage(`📨 Login received. User: ${data.username}, Root: ${data.root}`);
+                    if (isRoot) {
+                        localStorage.setItem("my_secret", "SOME_ENV_SECRET"); // simulate storing a secret
+                        logMessage("🔐 Secret stored in localStorage.");
+                    }
+                } else if (data.type === "approve_secret") {
+                    if (isRoot) {
+                        pendingRequestUser = data.username;
+                        document.getElementById("approvalPrompt").textContent = `User "${data.username}" requested secret. Approve?`;
+                        document.getElementById("approvalSection").style.display = "block";
+                    }
+                } else if (data.type === "secret_result") {
+                    logMessage(`🔑 Secret received: ${data.secret}`);
+                } else {
+                    logMessage("📨 " + event.data);
+                }
             };
 
-            ws.onclose = () => {
-                logMessage("❌ Disconnected");
-                loginBtn.disabled = true;
-                sendBtn.disabled = true;
-            };
-
-            ws.onerror = (err) => {
-                logMessage("⚠️ Error: " + err.message);
-            };
+            ws.onclose = () => logMessage("❌ Disconnected");
+            ws.onerror = (err) => logMessage("⚠️ Error: " + err.message);
         }
 
         function sendLogin() {
-            const username = document.getElementById("usernameInput").value.trim();
-            if (!username) {
-                logMessage("❗ Please enter a username first.");
-                return;
-            }
+            const username = document.getElementById("usernameInput").value;
+            if (!username) return logMessage("❗ Please enter a username");
 
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const loginMsg = {
-                    type: "login",
-                    username: username
-                };
-                ws.send(JSON.stringify(loginMsg));
-                logMessage("➡️ Sent login as: " + username);
-            } else {
-                logMessage("❗ WebSocket is not connected.");
+            const loginMsg = {type: "login", username};
+            ws.send(JSON.stringify(loginMsg));
+            logMessage("➡️ Sent login as: " + username);
+        }
+
+        function getSecret() {
+            ws.send(JSON.stringify({type: "getsecret"}));
+            logMessage("🔐 Requested secret from server");
+        }
+
+        function approveSecret() {
+            const secret = localStorage.getItem("my_secret");
+            if (secret && pendingRequestUser) {
+                ws.send(JSON.stringify({
+                    type: "secret_response",
+                    username: pendingRequestUser,
+                    secret: secret
+                }));
+                logMessage(`✅ Approved request for ${pendingRequestUser}`);
+                pendingRequestUser = null;
+                document.getElementById("approvalSection").style.display = "none";
             }
         }
 
-        function sendMessage() {
-            const input = document.getElementById("messageInput");
-            const message = input.value.trim();
-            if (!message) return;
-
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(message);
-                logMessage("➡️ " + message);
-                input.value = "";
-            } else {
-                logMessage("❗ Not connected");
-            }
+        function denySecret() {
+            logMessage("❌ Denied secret request");
+            pendingRequestUser = null;
+            document.getElementById("approvalSection").style.display = "none";
         }
 
         function logMessage(msg) {
             log.textContent += msg + "\n";
             log.scrollTop = log.scrollHeight;
         }
-    </script>
 
+        window.onload = connect;
+    </script>
 </body>
 
 </html>
