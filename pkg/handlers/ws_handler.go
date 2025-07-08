@@ -102,9 +102,6 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 			log.Println("WebSocket upgrade failed:", err)
 			return
 		}
-		if err := conn.Close(); err != nil {
-			log.Printf("Failed to close connection: %v", err)
-		}
 
 		client := &Client{
 			conn: conn,
@@ -153,6 +150,7 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 						"username": client.username,
 					}
 					reqJSON, _ := json.Marshal(request)
+					log.Println("User ", client.username, ", requested secret")
 					if err := root.conn.WriteMessage(websocket.TextMessage, reqJSON); err != nil {
 						log.Println("Writing message failed:", err)
 					}
@@ -177,6 +175,7 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 						"secret": secret,
 					}
 					resultJSON, _ := json.Marshal(result)
+					log.Println("Sending secret to user: ", targetClient)
 					if err := targetClient.conn.WriteMessage(websocket.TextMessage, resultJSON); err != nil {
 						log.Println("Write failed:", err)
 					}
