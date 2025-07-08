@@ -1,4 +1,4 @@
-package server
+package handlers
 
 import (
 	"fmt"
@@ -49,11 +49,11 @@ func (cm *ClientManager) Broadcast(message string) {
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // allow all origins for dev/test
+		return true
 	},
 }
 
-func wsHandler(cm *ClientManager) gin.HandlerFunc {
+func WsHandler(cm *ClientManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -73,16 +73,4 @@ func wsHandler(cm *ClientManager) gin.HandlerFunc {
 			cm.Broadcast(fmt.Sprintf("Echo: %s", msg))
 		}
 	}
-}
-
-func Run() *gin.Engine {
-	r := gin.Default()
-	cm := NewClientManager()
-
-	r.GET("/ping", func(ctx *gin.Context) {
-		ctx.String(http.StatusOK, "pong")
-	})
-	r.GET("/ws", wsHandler(cm))
-
-	return r
 }

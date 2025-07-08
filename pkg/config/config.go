@@ -11,6 +11,7 @@ type Config struct {
 	Host              string
 	Username          string
 	SecretStoragePath string
+	WsEndpoing        string
 }
 
 func Load() *Config {
@@ -19,6 +20,7 @@ func Load() *Config {
 	host, _ := os.LookupEnv("HOST")
 	username, _ := os.LookupEnv("USERNAME")
 	secretStoragePath, _ := os.LookupEnv("SECRET_STORE_PATH")
+	wsEndpoint, _ := os.LookupEnv("WS_ENDPOINT")
 
 	portNumber, err := strconv.Atoi(port)
 	if err != nil {
@@ -30,6 +32,7 @@ func Load() *Config {
 	conf.Host = host
 	conf.Username = username
 	conf.SecretStoragePath = secretStoragePath
+	conf.WsEndpoing = wsEndpoint
 
 	return conf
 }
