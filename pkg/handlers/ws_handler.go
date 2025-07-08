@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"slices"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -39,8 +40,10 @@ func (cm *ClientManager) Remove(conn *websocket.Conn) {
 	defer cm.lock.Unlock()
 	for i, c := range cm.clients {
 		if c.conn == conn {
-			c.conn.Close()
-			cm.clients = append(cm.clients[:i], cm.clients[i+1:]...)
+			if err := conn.Close(); err != nil {
+				log.Printf("Failed to close connection: %v", err)
+			}
+			cm.clients = slices.Delete(cm.clients, i, i+1)
 			break
 		}
 	}
@@ -75,7 +78,9 @@ func (cm *ClientManager) Broadcast(message string) {
 		err := client.conn.WriteMessage(websocket.TextMessage, []byte(message))
 		if err != nil {
 			log.Println("Broadcast write error:", err)
-			client.conn.Close()
+			if err := client.conn.Close(); err != nil {
+				log.Printf("Failed to close connection: %v", err)
+			}
 			continue
 		}
 		aliveClients = append(aliveClients, client)
@@ -97,7 +102,9 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 			log.Println("WebSocket upgrade failed:", err)
 			return
 		}
-		defer conn.Close()
+		if err := conn.Close(); err != nil {
+			log.Printf("Failed to close connection: %v", err)
+		}
 
 		client := &Client{
 			conn: conn,
@@ -131,7 +138,9 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 					"root":     isRoot,
 				}
 				respJSON, _ := json.Marshal(response)
-				conn.WriteMessage(websocket.TextMessage, respJSON)
+				if err := conn.WriteMessage(websocket.TextMessage, respJSON); err != nil {
+					log.Println("Write failed:", err)
+				}
 
 			case "getsecret":
 				if client.isRoot {
@@ -144,14 +153,18 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 						"username": client.username,
 					}
 					reqJSON, _ := json.Marshal(request)
-					root.conn.WriteMessage(websocket.TextMessage, reqJSON)
+					if err := root.conn.WriteMessage(websocket.TextMessage, reqJSON); err != nil {
+						log.Println("Writing message failed:", err)
+					}
 				} else {
 					errResp := map[string]any{
 						"type":  "error",
 						"error": "No root user connected",
 					}
 					errJSON, _ := json.Marshal(errResp)
-					conn.WriteMessage(websocket.TextMessage, errJSON)
+					if err := conn.WriteMessage(websocket.TextMessage, errJSON); err != nil {
+						log.Println("Write failed:", err)
+					}
 				}
 
 			case "secret_response":
@@ -164,7 +177,9 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 						"secret": secret,
 					}
 					resultJSON, _ := json.Marshal(result)
-					targetClient.conn.WriteMessage(websocket.TextMessage, resultJSON)
+					if err := targetClient.conn.WriteMessage(websocket.TextMessage, resultJSON); err != nil {
+						log.Println("Write failed:", err)
+					}
 				}
 
 			default:
