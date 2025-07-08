@@ -25,17 +25,20 @@
 
     <h1>WebSocket Client</h1>
 
-    <input id="usernameInput" type="text" placeholder="Enter username" />
-    <button onclick="sendLogin()">Send</button>
+    <input id="usernameInput" type="text" placeholder="Enter username" autofocus />
+    <button id="loginBtn" onclick="sendLogin()" disabled>Login</button>
+    <br><br>
     <input id="messageInput" type="text" placeholder="Enter message" />
-    <button onclick="sendMessage()">Send</button>
-    <button onclick="connect()">Reconnect</button>
+    <button id="sendBtn" onclick="sendMessage()" disabled>Send Message</button>
+    <button onclick="connect()">Connect</button>
 
     <div id="log"></div>
 
     <script>
         let ws;
         const log = document.getElementById("log");
+        const loginBtn = document.getElementById("loginBtn");
+        const sendBtn = document.getElementById("sendBtn");
 
         function connect() {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -46,6 +49,8 @@
 
             ws.onopen = () => {
                 logMessage("✅ Connected. Now click Login to authenticate.");
+                loginBtn.disabled = false;
+                sendBtn.disabled = false;
             };
 
             ws.onmessage = (event) => {
@@ -54,6 +59,8 @@
 
             ws.onclose = () => {
                 logMessage("❌ Disconnected");
+                loginBtn.disabled = true;
+                sendBtn.disabled = true;
             };
 
             ws.onerror = (err) => {
@@ -62,7 +69,7 @@
         }
 
         function sendLogin() {
-            const username = document.getElementById("usernameInput").value;
+            const username = document.getElementById("usernameInput").value.trim();
             if (!username) {
                 logMessage("❗ Please enter a username first.");
                 return;
@@ -82,9 +89,12 @@
 
         function sendMessage() {
             const input = document.getElementById("messageInput");
+            const message = input.value.trim();
+            if (!message) return;
+
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(input.value);
-                logMessage("➡️ " + input.value);
+                ws.send(message);
+                logMessage("➡️ " + message);
                 input.value = "";
             } else {
                 logMessage("❗ Not connected");

@@ -9,7 +9,7 @@ build:
 	- podman build -t codebox-wss:latest .
 
 start: build
-	@echo "Starting Websocket Server container..."
+	@echo "Starting Websocket Server container... $(USERNAME)"
 	- podman run --name codebox-wss --replace -d \
 		-p $(PORT):$(PORT) \
 		-e PORT=$(PORT) \
