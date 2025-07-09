@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/mmarci96/codebox-wss-addon/pkg/config"
+	"github.com/mmarci96/codebox-wss-addon/pkg/store"
 )
 
 type Client struct {
@@ -95,7 +97,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
+func WsHandler(cm *ClientManager, conf *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -117,15 +119,25 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 			}
 
 			var parsed map[string]any
+
 			if err := json.Unmarshal(msg, &parsed); err != nil {
-				log.Println("Invalid JSON:", string(msg))
+				log.Printf("Invalid JSON: %s, err: %v", string(msg), err)
 				continue
 			}
 
 			switch parsed["type"] {
 			case "login":
-				username := parsed["username"].(string)
-				isRoot := username == hostUser
+				usernameRaw, ok := parsed["username"]
+				if !ok {
+					log.Println("Missing username field")
+					continue
+				}
+				username, ok := usernameRaw.(string)
+				if !ok {
+					log.Println("username is not a string")
+					continue
+				}
+				isRoot := username == conf.Username
 				client.username = username
 				client.isRoot = isRoot
 
@@ -176,6 +188,21 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 					}
 					resultJSON, _ := json.Marshal(result)
 					log.Println("Sending secret to user: ", targetClient)
+					secret := &store.UserSecret{
+						Name:  "example-secret",
+						Value: secret,
+					}
+
+					err := store.SaveSecret(secret, conf.SecretStoragePath)
+					if err != nil {
+						log.Println("Save to files failed,", err)
+					} else {
+						log.Println("Saved secret.", secret)
+						saved, _ := store.GetSecret("example-secret", conf.SecretStoragePath)
+						log.Println("Found secret file:", saved)
+					}
+					store.SwipeSecret(*secret, 10, conf.SecretStoragePath)
+
 					if err := targetClient.conn.WriteMessage(websocket.TextMessage, resultJSON); err != nil {
 						log.Println("Write failed:", err)
 					}

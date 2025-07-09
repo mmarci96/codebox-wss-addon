@@ -1,7 +1,7 @@
 package store
 
 import (
-	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -29,14 +29,16 @@ func GetSecret(name string, path string) (UserSecret, error) {
 	}, nil
 }
 
-func SwipeSecret(secret UserSecret, deleteAfter int) {
-	filePath := filepath.Join(os.TempDir(), secret.Name+".txt")
-	time.AfterFunc(time.Duration(deleteAfter)*time.Second, func() {
-		err := os.Remove(filePath)
-		if err != nil {
-			fmt.Printf("Failed to delete %s: %v\n", filePath, err)
+func SwipeSecret(secret UserSecret, deleteAfter int, path string) {
+	go func() {
+		log.Printf("SwipeSecret started for %s, waiting %d seconds", secret.Name, deleteAfter)
+		time.Sleep(time.Duration(deleteAfter) * time.Second)
+
+		path := filepath.Join(path, secret.Name)
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to delete secret %s: %v", secret.Name, err)
 		} else {
-			fmt.Printf("Secret %s deleted.\n", secret.Name)
+			log.Printf("Deleted secret %s", secret.Name)
 		}
-	})
+	}()
 }
