@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"slices"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/mmarci96/codebox-wss-addon/pkg/config"
+	"github.com/mmarci96/codebox-wss-addon/pkg/store"
 )
 
 type Client struct {
@@ -39,8 +42,10 @@ func (cm *ClientManager) Remove(conn *websocket.Conn) {
 	defer cm.lock.Unlock()
 	for i, c := range cm.clients {
 		if c.conn == conn {
-			c.conn.Close()
-			cm.clients = append(cm.clients[:i], cm.clients[i+1:]...)
+			if err := conn.Close(); err != nil {
+				log.Printf("Failed to close connection: %v", err)
+			}
+			cm.clients = slices.Delete(cm.clients, i, i+1)
 			break
 		}
 	}
@@ -75,7 +80,9 @@ func (cm *ClientManager) Broadcast(message string) {
 		err := client.conn.WriteMessage(websocket.TextMessage, []byte(message))
 		if err != nil {
 			log.Println("Broadcast write error:", err)
-			client.conn.Close()
+			if err := client.conn.Close(); err != nil {
+				log.Printf("Failed to close connection: %v", err)
+			}
 			continue
 		}
 		aliveClients = append(aliveClients, client)
@@ -90,14 +97,13 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
+func WsHandler(cm *ClientManager, conf *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			log.Println("WebSocket upgrade failed:", err)
 			return
 		}
-		defer conn.Close()
 
 		client := &Client{
 			conn: conn,
@@ -113,15 +119,25 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 			}
 
 			var parsed map[string]any
+
 			if err := json.Unmarshal(msg, &parsed); err != nil {
-				log.Println("Invalid JSON:", string(msg))
+				log.Printf("Invalid JSON: %s, err: %v", string(msg), err)
 				continue
 			}
 
 			switch parsed["type"] {
 			case "login":
-				username := parsed["username"].(string)
-				isRoot := username == hostUser
+				usernameRaw, ok := parsed["username"]
+				if !ok {
+					log.Println("Missing username field")
+					continue
+				}
+				username, ok := usernameRaw.(string)
+				if !ok {
+					log.Println("username is not a string")
+					continue
+				}
+				isRoot := username == conf.Username
 				client.username = username
 				client.isRoot = isRoot
 
@@ -131,7 +147,9 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 					"root":     isRoot,
 				}
 				respJSON, _ := json.Marshal(response)
-				conn.WriteMessage(websocket.TextMessage, respJSON)
+				if err := conn.WriteMessage(websocket.TextMessage, respJSON); err != nil {
+					log.Println("Write failed:", err)
+				}
 
 			case "getsecret":
 				if client.isRoot {
@@ -144,14 +162,19 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 						"username": client.username,
 					}
 					reqJSON, _ := json.Marshal(request)
-					root.conn.WriteMessage(websocket.TextMessage, reqJSON)
+					log.Println("User ", client.username, ", requested secret")
+					if err := root.conn.WriteMessage(websocket.TextMessage, reqJSON); err != nil {
+						log.Println("Writing message failed:", err)
+					}
 				} else {
 					errResp := map[string]any{
 						"type":  "error",
 						"error": "No root user connected",
 					}
 					errJSON, _ := json.Marshal(errResp)
-					conn.WriteMessage(websocket.TextMessage, errJSON)
+					if err := conn.WriteMessage(websocket.TextMessage, errJSON); err != nil {
+						log.Println("Write failed:", err)
+					}
 				}
 
 			case "secret_response":
@@ -164,7 +187,25 @@ func WsHandler(cm *ClientManager, hostUser string) gin.HandlerFunc {
 						"secret": secret,
 					}
 					resultJSON, _ := json.Marshal(result)
-					targetClient.conn.WriteMessage(websocket.TextMessage, resultJSON)
+					log.Println("Sending secret to user: ", targetClient)
+					secret := &store.UserSecret{
+						Name:  "example-secret",
+						Value: secret,
+					}
+
+					err := store.SaveSecret(secret, conf.SecretStoragePath)
+					if err != nil {
+						log.Println("Save to files failed,", err)
+					} else {
+						log.Println("Saved secret.", secret)
+						saved, _ := store.GetSecret("example-secret", conf.SecretStoragePath)
+						log.Println("Found secret file:", saved)
+					}
+					store.SwipeSecret(*secret, 10, conf.SecretStoragePath)
+
+					if err := targetClient.conn.WriteMessage(websocket.TextMessage, resultJSON); err != nil {
+						log.Println("Write failed:", err)
+					}
 				}
 
 			default:
