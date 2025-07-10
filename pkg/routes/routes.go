@@ -33,7 +33,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	config := config.Load()
 
-	r.GET(cfg.WsEndpoing, handlers.WsHandler(cm, config))
+	r.GET(cfg.WsEndpoint, handlers.WsHandler(cm, config))
 	r.GET("/ping", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "pong")
 	})
