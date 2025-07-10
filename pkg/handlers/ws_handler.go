@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/mmarci96/codebox-wss-addon/pkg/config"
-	"github.com/mmarci96/codebox-wss-addon/pkg/store"
 )
 
 type Client struct {
@@ -188,20 +187,6 @@ func WsHandler(cm *ClientManager, conf *config.Config) gin.HandlerFunc {
 					}
 					resultJSON, _ := json.Marshal(result)
 					log.Println("Sending secret to user: ", targetClient)
-					secret := &store.UserSecret{
-						Name:  "example-secret",
-						Value: secret,
-					}
-
-					err := store.SaveSecret(secret, conf.SecretStoragePath)
-					if err != nil {
-						log.Println("Save to files failed,", err)
-					} else {
-						log.Println("Saved secret.", secret)
-						saved, _ := store.GetSecret("example-secret", conf.SecretStoragePath)
-						log.Println("Found secret file:", saved)
-					}
-					store.SwipeSecret(*secret, 10, conf.SecretStoragePath)
 
 					if err := targetClient.conn.WriteMessage(websocket.TextMessage, resultJSON); err != nil {
 						log.Println("Write failed:", err)

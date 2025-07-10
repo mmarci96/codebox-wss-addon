@@ -31,11 +31,12 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	})
 	cm := handlers.NewClientManager()
 
-	r.GET(cfg.WsEndpoing, handlers.WsHandler(cm, config.Load().Username))
+	config := config.Load()
+
+	r.GET(cfg.WsEndpoing, handlers.WsHandler(cm, config))
 	r.GET("/ping", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "pong")
 	})
 
 	return r
 }
-

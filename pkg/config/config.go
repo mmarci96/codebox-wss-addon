@@ -11,7 +11,7 @@ type Config struct {
 	Host              string
 	Username          string
 	SecretStoragePath string
-	WsEndpoing        string
+	WsEndpoint        string
 }
 
 func Load() *Config {
@@ -32,7 +32,7 @@ func Load() *Config {
 	conf.Host = host
 	conf.Username = username
 	conf.SecretStoragePath = secretStoragePath
-	conf.WsEndpoing = wsEndpoint
+	conf.WsEndpoint = wsEndpoint
 
 	return conf
 }
